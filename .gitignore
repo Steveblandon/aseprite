@@ -15,3 +15,7 @@
 
 # CMake output
 build
+
+# other build related directories
+backups
+deps
