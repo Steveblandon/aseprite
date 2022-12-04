@@ -50,7 +50,7 @@ You can ask for help in:
 # Windows-only compilation instructions
 Note, you'll need git installed and already in your environment variables path.
 ## Pre-build instructions (environment setup)
-_ * note, you only need to do this setup once_
+_* note, you only need to do this setup once_
 1. Install [Visual Studio Community 2022] with the "Desktop development with C++" Workload + "Windows 10.0.18362.0 SDK" (this step will take a while so continue with the rest of the pre-build instructions while this runs in the background).
 2. Install the latest version of [CMake](https://cmake.org) (3.16 or greater)
 3. Download [Ninja](https://ninja-build.org), unzip, and copy ninja.exe to C:\Program Files\CMake\bin
