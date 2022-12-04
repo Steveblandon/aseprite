@@ -49,7 +49,7 @@ You can ask for help in:
 
 # Windows-only compilation instructions
 Note, you'll need git installed and already in your environment variables path.
-# Pre-build instructions (environment setup)
+## Pre-build instructions (environment setup)
 _ * note, you only need to do this setup once_
 1. Install [Visual Studio Community 2022] with the "Desktop development with C++" Workload + "Windows 10.0.18362.0 SDK" (this step will take a while so continue with the rest of the pre-build instructions while this runs in the background).
 2. Install the latest version of [CMake](https://cmake.org) (3.16 or greater)
@@ -60,7 +60,7 @@ _ * note, you only need to do this setup once_
 8. Run command -> mkdir aseprite/build/
 9. Download [Skia library - `aseprite-m102` branch](https://github.com/aseprite/skia/releases), unzip, and copy skia directory to aseprite/deps
 
-# Manual build instructions
+## Manual build instructions
 _* note, you can skip manual build and just use the provided build.bat - these instructions are just here for context of what that build script is doing. 
 You can skip steps 4 and 5 if you don't want to update your local repo to the latest from the master branch._
 1. Once VS2022 has been installed, open command prompt (cmd.exe) or re-use the previously opened one.
@@ -73,6 +73,8 @@ You can skip steps 4 and 5 if you don't want to update your local repo to the la
 8. aseprite is ready for use, find executable at aseprite\build\bin\aseprite.exe
 
 If you ever need to or want to re-compile aseprite, make a backup of your aseprite\build\bin folder and delete everything else in your build folder, otherwise it will conflict with your new build. Once the build folder is clean, follow these build instructions to compile again.
+
+# Additional Details
 
 ## Authors
 
