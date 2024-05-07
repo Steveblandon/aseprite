@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2024  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -44,7 +44,8 @@ using namespace filters;
 ToolLoopManager::ToolLoopManager(ToolLoop* toolLoop)
   : m_toolLoop(toolLoop)
   , m_canceled(false)
-  , m_brush0(*toolLoop->getBrush())
+  , m_brushSize0(toolLoop->getBrush()->size())
+  , m_brushAngle0(toolLoop->getBrush()->angle())
   , m_dynamics(toolLoop->getDynamics())
 {
 }
@@ -169,7 +170,7 @@ bool ToolLoopManager::releaseButton(const Pointer& pointer)
 void ToolLoopManager::movement(Pointer pointer)
 {
   // Filter points with the stabilizer
-  if (m_dynamics.stabilizerFactor > 0) {
+  if (m_dynamics.stabilizer && m_dynamics.stabilizerFactor > 0) {
     const double f = m_dynamics.stabilizerFactor;
     const gfx::Point delta = (pointer.point() - m_stabilizerCenter);
     const double distance = std::sqrt(delta.x*delta.x + delta.y*delta.y);
@@ -358,8 +359,8 @@ Stroke::Pt ToolLoopManager::getSpriteStrokePt(const Pointer& pointer)
 {
   // Convert the screen point to a sprite point
   Stroke::Pt spritePoint = pointer.point();
-  spritePoint.size = m_brush0.size();
-  spritePoint.angle = m_brush0.angle();
+  spritePoint.size = m_brushSize0;
+  spritePoint.angle = m_brushAngle0;
 
   // Center the input to some grid point if needed
   snapToGrid(spritePoint);
@@ -379,6 +380,7 @@ Stroke::Pt ToolLoopManager::getSpriteStrokePt(const Pointer& pointer)
 bool ToolLoopManager::useDynamics() const
 {
   return (m_dynamics.isDynamic() &&
+          // TODO add support for dynamics to contour tool
           !m_toolLoop->getFilled() &&
           m_toolLoop->getController()->isFreehand());
 }

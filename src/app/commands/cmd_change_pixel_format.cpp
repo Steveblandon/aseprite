@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2024  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -14,6 +14,7 @@
 #include "app/cmd/set_pixel_format.h"
 #include "app/commands/command.h"
 #include "app/commands/params.h"
+#include "app/console.h"
 #include "app/context_access.h"
 #include "app/extensions.h"
 #include "app/i18n/strings.h"
@@ -27,7 +28,6 @@
 #include "app/ui/editor/editor_render.h"
 #include "app/ui/rgbmap_algorithm_selector.h"
 #include "app/ui/skin/skin_theme.h"
-#include "base/thread.h"
 #include "doc/image.h"
 #include "doc/layer.h"
 #include "doc/sprite.h"
@@ -43,7 +43,9 @@
 #include "ui/size_hint_event.h"
 
 #include "color_mode.xml.h"
+
 #include <string>
+#include <thread>
 
 namespace app {
 
@@ -161,7 +163,7 @@ private:
   bool m_running;
   bool m_stopFlag;
   double m_progress;
-  base::thread m_thread;
+  std::thread m_thread;
 };
 
 #ifdef ENABLE_UI
@@ -243,7 +245,7 @@ public:
       factor()->Change.connect([this]{ onIndexParamChange(); });
 
       advancedCheck()->Click.connect(
-        [this](ui::Event&){
+        [this](){
           advanced()->setVisible(advancedCheck()->isSelected());
           expandWindow(sizeHint());
         });
@@ -532,8 +534,14 @@ void ChangePixelFormatCommand::onLoadParams(const Params& params)
     // Then, if the matrix doesn't exist we try to load it from a file
     else {
       render::DitheringMatrix ditMatrix;
-      if (!load_dithering_matrix_from_sprite(matrix, ditMatrix))
-        throw std::runtime_error("Invalid matrix name");
+      try {
+        load_dithering_matrix_from_sprite(matrix, ditMatrix);
+      }
+      catch (const std::exception& e) {
+        LOG(ERROR, "%s\n", e.what());
+        Console::showException(e);
+      }
+
       m_dithering.matrix(ditMatrix);
     }
   }
@@ -638,12 +646,12 @@ void ChangePixelFormatCommand::onExecute(Context* context)
 #endif // ENABLE_UI
 
   // No conversion needed
-  if (context->activeDocument()->sprite()->pixelFormat() == m_format)
+  Doc* doc = context->activeDocument();
+  if (doc->sprite()->pixelFormat() == m_format)
     return;
 
   {
-    const ContextReader reader(context);
-    SpriteJob job(reader, Strings::color_mode_title().c_str());
+    SpriteJob job(context, doc, Strings::color_mode_title());
     Sprite* sprite(job.sprite());
 
     // TODO this was moved in the main UI thread because
@@ -654,16 +662,17 @@ void ChangePixelFormatCommand::onExecute(Context* context)
     //      https://github.com/aseprite/aseprite/issues/509
     //      https://github.com/aseprite/aseprite/issues/378
     if (flatten) {
+      Tx tx(Tx::LockDoc, context, doc);
       const bool newBlend = Preferences::instance().experimental.newBlend();
       SelectedLayers selLayers;
       for (auto layer : sprite->root()->layers())
         selLayers.insert(layer);
-      job.tx()(new cmd::FlattenLayers(sprite, selLayers, newBlend));
+      tx(new cmd::FlattenLayers(sprite, selLayers, newBlend));
     }
 
     job.startJobWithCallback(
-      [this, &job, sprite] {
-        job.tx()(
+      [this, &job, sprite](Tx& tx) {
+        tx(
           new cmd::SetPixelFormat(
             sprite, m_format,
             m_dithering,
@@ -702,7 +711,7 @@ std::string ChangePixelFormatCommand::onGetFriendlyName() const
             conversion = Strings::commands_ChangePixelFormat_Indexed_OldDithering();
             break;
           case render::DitheringAlgorithm::ErrorDiffusion:
-            conversion = Strings::commands_ChangePixelFormat_Indexed_ErrorDifussion();
+            conversion = Strings::commands_ChangePixelFormat_Indexed_ErrorDiffusion();
             break;
         }
         break;

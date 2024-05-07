@@ -1,5 +1,5 @@
 # Aseprite
-# Copyright (C) 2018-2022  Igara Studio S.A.
+# Copyright (C) 2018-2024  Igara Studio S.A.
 # Copyright (C) 2001-2018  David Capello
 
 # Generate a ui::Widget for each widget in a XML file
@@ -101,23 +101,20 @@ add_definitions(-DLIBARCHIVE_STATIC)
 ######################################################################
 # app-lib target
 
+add_library(app-lib ${generated_files})
+
 # These specific-platform files should be in an external library
 # (e.g. "base" or "os").
-set(app_platform_files)
 if(WIN32)
-  set(app_platform_files
-    font_path_win.cpp)
+  target_sources(app-lib PRIVATE font_path_win.cpp)
 elseif(APPLE)
-  set(app_platform_files
-    font_path_osx.mm)
+  target_sources(app-lib PRIVATE font_path_osx.mm)
 else()
-  set(app_platform_files
-    font_path_unix.cpp)
+  target_sources(app-lib PRIVATE font_path_unix.cpp)
 endif()
 
-set(data_recovery_files)
 if(ENABLE_DATA_RECOVERY)
-  set(data_recovery_files
+  target_sources(app-lib PRIVATE
     crash/backup_observer.cpp
     crash/data_recovery.cpp
     crash/read_document.cpp
@@ -126,7 +123,7 @@ if(ENABLE_DATA_RECOVERY)
     ui/data_recovery_view.cpp)
 endif()
 
-set(file_formats
+target_sources(app-lib PRIVATE
   file/ase_format.cpp
   file/bmp_format.cpp
   file/css_format.cpp
@@ -136,49 +133,56 @@ set(file_formats
   file/jpeg_format.cpp
   file/pcx_format.cpp
   file/png_format.cpp
+  file/qoi_format.cpp
   file/svg_format.cpp
   file/tga_format.cpp)
 if(ENABLE_WEBP)
-  list(APPEND file_formats file/webp_format.cpp)
+  target_sources(app-lib PRIVATE
+    file/webp_format.cpp)
 endif()
 if(ENABLE_PSD)
-  list(APPEND file_formats file/psd_format.cpp)
+  target_sources(app-lib PRIVATE
+    file/psd_format.cpp)
 endif()
 
-set(scripting_files)
 if(ENABLE_SCRIPTING)
-  set(scripting_files_ui)
   if(ENABLE_UI)
-    set(scripting_files_ui
+    target_sources(app-lib PRIVATE
       commands/cmd_developer_console.cpp
       commands/cmd_open_script_folder.cpp
       commands/debugger.cpp
       ui/devconsole_view.cpp)
   endif()
   if(ENABLE_WEBSOCKET)
-    set(scripting_files_ws
+    target_sources(app-lib PRIVATE
       script/websocket_class.cpp)
   endif()
-  set(scripting_files
+  target_sources(app-lib PRIVATE
     commands/cmd_run_script.cpp
     script/app_command_object.cpp
     script/app_fs_object.cpp
     script/app_object.cpp
+    script/app_theme_object.cpp
     script/brush_class.cpp
+    script/canvas_widget.cpp
     script/cel_class.cpp
     script/cels_class.cpp
     script/color_class.cpp
     script/color_space_class.cpp
     script/dialog_class.cpp
+    script/editor_class.cpp
     script/engine.cpp
     script/events_class.cpp
     script/frame_class.cpp
     script/frames_class.cpp
+    script/graphics_context.cpp
     script/grid_class.cpp
     script/image_class.cpp
     script/image_iterator_class.cpp
     script/image_spec_class.cpp
     script/images_class.cpp
+    script/json_class.cpp
+    script/keys.cpp
     script/layer_class.cpp
     script/layers_class.cpp
     script/luacpp.cpp
@@ -188,8 +192,10 @@ if(ENABLE_SCRIPTING)
     script/plugin_class.cpp
     script/point_class.cpp
     script/preferences_object.cpp
+    script/properties_class.cpp
     script/range_class.cpp
     script/rectangle_class.cpp
+    script/require.cpp
     script/security.cpp
     script/selection_class.cpp
     script/site_class.cpp
@@ -198,21 +204,23 @@ if(ENABLE_SCRIPTING)
     script/slices_class.cpp
     script/sprite_class.cpp
     script/sprites_class.cpp
+    script/tabs_widget.cpp
     script/tag_class.cpp
     script/tags_class.cpp
+    script/tile_class.cpp
     script/tileset_class.cpp
     script/tilesets_class.cpp
+    script/timer_class.cpp
     script/tool_class.cpp
+    script/uuid_class.cpp
     script/values.cpp
     script/version_class.cpp
-    shell.cpp
-    ${scripting_files_ws}
-    ${scripting_files_ui})
+    script/window_class.cpp
+    shell.cpp)
 endif()
 
-set(ui_app_files)
 if(ENABLE_UI)
-  set(ui_app_files
+  target_sources(app-lib PRIVATE
     app_brushes.cpp
     app_menus.cpp
     closed_docs.cpp
@@ -297,7 +305,6 @@ if(ENABLE_UI)
     commands/cmd_set_palette.cpp
     commands/cmd_set_palette_entry_size.cpp
     commands/cmd_set_same_ink.cpp
-    commands/cmd_show.cpp
     commands/cmd_slice_properties.cpp
     commands/cmd_sprite_properties.cpp
     commands/cmd_swap_checkerboard_colors.cpp
@@ -315,11 +322,16 @@ if(ENABLE_UI)
     commands/filters/filter_target_buttons.cpp
     commands/filters/filter_window.cpp
     commands/screenshot.cpp
+    commands/set_playback_speed.cpp
     commands/show_menu.cpp
     commands/tileset_mode.cpp
+    commands/toggle_other_layers_opacity.cpp
+    commands/toggle_play_option.cpp
     file_selector.cpp
     modules/gfx.cpp
     modules/gui.cpp
+    ui/alpha_entry.cpp
+    ui/alpha_slider.cpp
     ui/app_menuitem.cpp
     ui/backup_indicator.cpp
     ui/browser_view.cpp
@@ -374,6 +386,7 @@ if(ENABLE_UI)
     ui/hex_color_entry.cpp
     ui/home_view.cpp
     ui/icon_button.cpp
+    ui/incompat_file_window.cpp
     ui/input_chain.cpp
     ui/keyboard_shortcuts.cpp
     ui/main_menu_bar.cpp
@@ -415,38 +428,32 @@ if(ENABLE_UI)
     ui/workspace_tabs.cpp
     ui/zoom_entry.cpp
     ui_context.cpp
-    util/clipboard.cpp
-    util/clipboard_native.cpp
     widget_loader.cpp)
   if(ENABLE_NEWS)
-    set(ui_app_files
+    target_sources(app-lib PRIVATE
       res/http_loader.cpp
-      ui/news_listbox.cpp
-      ${ui_app_files})
+      ui/news_listbox.cpp)
   endif()
   if(ENABLE_DRM)
-    set(ui_app_files
+    target_sources(app-lib PRIVATE
       ui/enter_license.cpp
-      ui/aseprite_update.cpp
-    ${ui_app_files})
+      ui/aseprite_update.cpp)
   endif()
 endif()
 
-set(send_crash_files)
 if(ENABLE_SENTRY)
-  set(send_crash_files sentry_wrapper.cpp)
+  target_sources(app-lib PRIVATE sentry_wrapper.cpp)
 else()
-  set(send_crash_files send_crash.cpp)
+  target_sources(app-lib PRIVATE send_crash.cpp)
 endif()
 
-add_library(app-lib
+target_sources(app-lib PRIVATE
   active_site_handler.cpp
   app.cpp
   check_update.cpp
   cli/app_options.cpp
   cli/cli_open_file.cpp
   cli/cli_processor.cpp
-  ${file_formats}
   cli/default_cli_delegate.cpp
   cli/preview_cli_delegate.cpp
   cmd.cpp
@@ -499,6 +506,7 @@ add_library(app-lib
   cmd/set_cel_frame.cpp
   cmd/set_cel_opacity.cpp
   cmd/set_cel_position.cpp
+  cmd/set_cel_zindex.cpp
   cmd/set_frame_duration.cpp
   cmd/set_grid_bounds.cpp
   cmd/set_last_point.cpp
@@ -506,6 +514,7 @@ add_library(app-lib
   cmd/set_layer_flags.cpp
   cmd/set_layer_name.cpp
   cmd/set_layer_opacity.cpp
+  cmd/set_layer_tileset.cpp
   cmd/set_mask.cpp
   cmd/set_mask_position.cpp
   cmd/set_palette.cpp
@@ -514,16 +523,23 @@ add_library(app-lib
   cmd/set_slice_key.cpp
   cmd/set_slice_name.cpp
   cmd/set_sprite_size.cpp
+  cmd/set_sprite_tile_management_plugin.cpp
   cmd/set_tag_anidir.cpp
   cmd/set_tag_color.cpp
   cmd/set_tag_name.cpp
   cmd/set_tag_range.cpp
   cmd/set_tag_repeat.cpp
+  cmd/set_tile_data.cpp
+  cmd/set_tile_data_properties.cpp
+  cmd/set_tile_data_property.cpp
   cmd/set_tileset_base_index.cpp
+  cmd/set_tileset_match_flags.cpp
   cmd/set_tileset_name.cpp
   cmd/set_total_frames.cpp
   cmd/set_transparent_color.cpp
   cmd/set_user_data.cpp
+  cmd/set_user_data_properties.cpp
+  cmd/set_user_data_property.cpp
   cmd/shift_masked_cel.cpp
   cmd/trim_cel.cpp
   cmd/unlink_cel.cpp
@@ -565,11 +581,13 @@ add_library(app-lib
   commands/cmd_palette_size.cpp
   commands/cmd_remove_layer.cpp
   commands/cmd_save_file.cpp
+  commands/cmd_show.cpp
   commands/cmd_sprite_size.cpp
   commands/cmd_undo.cpp
   commands/command.cpp
   commands/commands.cpp
   commands/convert_layer.cpp
+  commands/copy_path.cpp
   commands/export_tileset.cpp
   commands/filters/cmd_brightness_contrast.cpp
   commands/filters/cmd_color_curve.cpp
@@ -625,6 +643,7 @@ add_library(app-lib
   modules/palettes.cpp
   pref/preferences.cpp
   recent_files.cpp
+  render/shader_renderer.cpp
   render/simple_renderer.cpp
   res/palettes_loader_delegate.cpp
   res/resources_loader.cpp
@@ -654,6 +673,8 @@ add_library(app-lib
   util/autocrop.cpp
   util/buffer_region.cpp
   util/cel_ops.cpp
+  util/clipboard.cpp
+  util/clipboard_native.cpp
   util/conversion_to_surface.cpp
   util/expand_cel_canvas.cpp
   util/filetoks.cpp
@@ -668,15 +689,12 @@ add_library(app-lib
   util/range_utils.cpp
   util/readable_time.cpp
   util/resize_image.cpp
+  util/shader_helpers.cpp
+  util/tile_flags_utils.cpp
+  util/tileset_utils.cpp
   util/wrap_point.cpp
   xml_document.cpp
-  xml_exception.cpp
-  ${send_crash_files}
-  ${ui_app_files}
-  ${app_platform_files}
-  ${data_recovery_files}
-  ${scripting_files}
-  ${generated_files})
+  xml_exception.cpp)
 
 if(TARGET generated_version)
   add_dependencies(app-lib generated_version)
@@ -711,7 +729,8 @@ target_link_libraries(app-lib
   json11
   archive_static
   fmt
-  tinyexpr)
+  tinyexpr
+  qoi)
 
 if(ENABLE_PSD)
   target_link_libraries(app-lib psd)
@@ -741,7 +760,10 @@ if(ENABLE_UPDATER)
 endif()
 
 if(ENABLE_STEAM)
-  add_definitions(-DENABLE_STEAM)
+  # We need the ENABLE_STEAM flag in main module too so AppOptions are
+  # equal in both modules, app-lib and main (that's why this flag is
+  # marked as PUBLIC).
+  target_compile_definitions(app-lib PUBLIC -DENABLE_STEAM)
   target_link_libraries(app-lib steam-lib)
 endif()
 

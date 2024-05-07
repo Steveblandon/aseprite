@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2022  Igara Studio S.A.
+// Copyright (C) 2018-2024  Igara Studio S.A.
 // Copyright (C) 2001-2017  David Capello
 //
 // This program is distributed under the terms of
@@ -21,8 +21,8 @@ class AppOptions {
 public:
   enum VerboseLevel {
     kNoVerbose,
-    kVerbose,
-    kHighlyVerbose,
+    kVerbose,                   // --verbose
+    kHighlyVerbose,             // --debug
   };
 
   typedef base::ProgramOptions PO;
@@ -83,6 +83,7 @@ public:
   const Option& crop() const { return m_crop; }
   const Option& slice() const { return m_slice; }
   const Option& filenameFormat() const { return m_filenameFormat; }
+  const Option& tagnameFormat() const { return m_tagnameFormat; }
 #ifdef ENABLE_SCRIPTING
   const Option& script() const { return m_script; }
   const Option& scriptParam() const { return m_scriptParam; }
@@ -94,6 +95,9 @@ public:
   const Option& exportTileset() const { return m_exportTileset; }
 
   bool hasExporterParams() const;
+#ifdef ENABLE_STEAM
+  bool noInApp() const;
+#endif
 #ifdef _WIN32
   bool disableWintab() const;
 #endif
@@ -152,6 +156,7 @@ private:
   Option& m_crop;
   Option& m_slice;
   Option& m_filenameFormat;
+  Option& m_tagnameFormat;
 #ifdef ENABLE_SCRIPTING
   Option& m_script;
   Option& m_scriptParam;
@@ -164,6 +169,9 @@ private:
 
   Option& m_verbose;
   Option& m_debug;
+#ifdef ENABLE_STEAM
+  Option& m_noInApp;
+#endif
 #ifdef _WIN32
   Option& m_disableWintab;
 #endif

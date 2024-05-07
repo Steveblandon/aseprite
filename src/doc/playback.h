@@ -50,7 +50,8 @@ namespace doc {
              const TagsList& tagsList,
              const frame_t frame,
              const Mode playMode,
-             const Tag* tag);
+             const Tag* tag,
+             const int forward = 1);
 
     Playback(const Sprite* sprite = nullptr,
              const frame_t frame = 0,
@@ -115,10 +116,9 @@ namespace doc {
                 const int forward);
     void removeLastTagFromPlayed();
     bool decrementRepeat(const frame_t frameDelta);
-    frame_t firstTagFrame(const Tag* tag,
-                          const frame_t frameDelta);
-    void goToFirstTagFrame(const Tag* tag,
-                           const frame_t frameDelta);
+    frame_t firstTagFrame(const Tag* tag);
+    frame_t lastTagFrame(const Tag* tag);
+    void goToFirstTagFrame(const Tag* tag);
     int getParentForward() const;
 
     const Sprite* m_sprite;
@@ -129,6 +129,7 @@ namespace doc {
     frame_t m_initialFrame;
     frame_t m_frame;
     Mode m_playMode;
+    int m_forward;
 
     // Queue of tags to play and tags that are being played
     std::vector<std::unique_ptr<PlayTag>> m_playing;

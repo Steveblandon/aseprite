@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2021  Igara Studio S.A.
+// Copyright (C) 2018-2024  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -14,11 +14,12 @@
 #include "app/color.h"
 #include "app/color_utils.h"
 #include "app/commands/command.h"
+#include "app/console.h"
 #include "app/context.h"
 #include "app/context_access.h"
 #include "app/doc.h"
-#include "app/ini_file.h"
 #include "app/i18n/strings.h"
+#include "app/ini_file.h"
 #include "app/modules/gui.h"
 #include "app/tx.h"
 #include "app/ui/color_bar.h"
@@ -77,6 +78,7 @@ private:
   CheckBox* m_checkPreview = nullptr;
   Slider* m_sliderTolerance = nullptr;
   SelModeField* m_selMode = nullptr;
+  bool m_isOrigMaskVisible;
 };
 
 MaskByColorCommand::MaskByColorCommand()
@@ -167,6 +169,10 @@ void MaskByColorCommand::onExecute(Context* context)
   m_window->remapWindow();
   m_window->centerWindow();
 
+  // Save original mask visibility to process it correctly in
+  // ADD/SUBTRACT/INTERSECT Selection Mode
+  m_isOrigMaskVisible = reader.document()->isMaskVisible();
+
   // Mask first preview
   maskPreview(reader);
 
@@ -182,7 +188,7 @@ void MaskByColorCommand::onExecute(Context* context)
   Doc* document(writer.document());
 
   if (apply) {
-    Tx tx(writer.context(), "Mask by Color", DoesntModifyDocument);
+    Tx tx(writer, "Mask by Color", DoesntModifyDocument);
     std::unique_ptr<Mask> mask(generateMask(*document->mask(),
                                             sprite, image, xpos, ypos,
                                             m_selMode->selectionMode()));
@@ -217,7 +223,7 @@ Mask* MaskByColorCommand::generateMask(const Mask& origMask,
   mask->byColor(image, color, tolerance);
   mask->offsetOrigin(xpos, ypos);
 
-  if (!origMask.isEmpty()) {
+  if (!origMask.isEmpty() && m_isOrigMaskVisible) {
     switch (mode) {
       case gen::SelectionMode::DEFAULT:
         break;
@@ -255,22 +261,21 @@ void MaskByColorCommand::maskPreview(const ContextReader& reader)
                                             reader.sprite(), image,
                                             xpos, ypos,
                                             m_selMode->selectionMode()));
-    {
-      ContextWriter writer(reader);
+
+    ContextWriter writer(reader);
 
 #ifdef SHOW_BOUNDARIES_GEN_PERFORMANCE
-      base::Chrono chrono;
+    base::Chrono chrono;
 #endif
 
-      writer.document()->generateMaskBoundaries(mask.get());
+    writer.document()->generateMaskBoundaries(mask.get());
 
 #ifdef SHOW_BOUNDARIES_GEN_PERFORMANCE
-      double time = chrono.elapsed();
-      m_window->setText("Mask by Color (" + base::convert_to<std::string>(time) + ")");
+    double time = chrono.elapsed();
+    m_window->setText("Mask by Color (" + base::convert_to<std::string>(time) + ")");
 #endif
 
-      update_screen_for_document(writer.document());
-    }
+    update_screen_for_document(writer.document());
   }
 }
 

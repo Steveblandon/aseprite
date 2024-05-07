@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2024  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -11,6 +11,7 @@
 
 #include "app/app.h"
 #include "app/commands/cmd_export_sprite_sheet.h"
+#include "app/console.h"
 #include "app/context.h"
 #include "app/context_access.h"
 #include "app/doc.h"
@@ -141,6 +142,17 @@ ConstraintType constraint_type_from_params(const ExportSpriteSheetParams& params
 
 #endif // ENABLE_UI
 
+void destroy_doc(Context* ctx, Doc* doc)
+{
+  try {
+    DocDestroyer destroyer(ctx, doc, 500);
+    destroyer.destroyDocument();
+  }
+  catch (const LockedDocException& ex) {
+    Console::showException(ex);
+  }
+}
+
 Doc* generate_sprite_sheet_from_params(
   DocExporter& exporter,
   Context* ctx,
@@ -158,6 +170,7 @@ Doc* generate_sprite_sheet_from_params(
   const std::string dataFilename = params.dataFilename();
   const SpriteSheetDataFormat dataFormat = params.dataFormat();
   const std::string filenameFormat = params.filenameFormat();
+  const std::string tagnameFormat = params.tagnameFormat();
   const std::string layerName = params.layer();
   const int layerIndex = params.layerIndex();
   const std::string tagName = params.tag();
@@ -235,6 +248,9 @@ Doc* generate_sprite_sheet_from_params(
   if (!filenameFormat.empty())
     exporter.setFilenameFormat(filenameFormat);
 
+  if (!tagnameFormat.empty())
+    exporter.setTagnameFormat(tagnameFormat);
+
   exporter.setTextureWidth(width);
   exporter.setTextureHeight(height);
   exporter.setTextureColumns(columns);
@@ -308,6 +324,7 @@ public:
     , m_genTimer(100, nullptr)
     , m_executionID(0)
     , m_filenameFormat(params.filenameFormat())
+    , m_tagnameFormat(params.tagnameFormat())
   {
     sectionTabs()->ItemChange.connect([this]{ onChangeSection(); });
     expandSections()->Click.connect([this]{ onExpandSections(); });
@@ -414,6 +431,7 @@ public:
     listSlices()->setSelected(params.listSlices());
 
     updateDefaultDataFilenameFormat();
+    updateDefaultDataTagnameFormat();
     updateDataFields();
 
     std::string base = site.document()->filename();
@@ -457,6 +475,7 @@ public:
     splitTags()->Click.connect([this]{ onSplitLayersOrFrames(); });
     frames()->Change.connect([this]{ generatePreview(); });
     dataFilenameFormat()->Change.connect([this]{ onDataFilenameFormatChange(); });
+    dataTagnameFormat()->Change.connect([this]{ onDataTagnameFormatChange(); });
     openGenerated()->Click.connect([this]{ onOpenGeneratedChange(); });
     preview()->Click.connect([this]{ generatePreview(); });
     m_genTimer.Tick.connect([this]{ onGenTimerTick(); });
@@ -493,8 +512,7 @@ public:
       auto ctx = UIContext::instance();
       ctx->setActiveDocument(m_site.document());
 
-      DocDestroyer destroyer(ctx, m_spriteSheet.release(), 100);
-      destroyer.destroyDocument();
+      destroy_doc(ctx, m_spriteSheet.release());
     }
   }
 
@@ -525,6 +543,7 @@ public:
     params.dataFilename    (dataFilenameValue());
     params.dataFormat      (dataFormatValue());
     params.filenameFormat  (filenameFormatValue());
+    params.tagnameFormat   (tagnameFormatValue());
     params.borderPadding   (borderPaddingValue());
     params.shapePadding    (shapePaddingValue());
     params.innerPadding    (innerPaddingValue());
@@ -662,6 +681,14 @@ private:
     if (!m_filenameFormat.empty() &&
         m_filenameFormat != m_filenameFormatDefault)
       return m_filenameFormat;
+    else
+      return std::string();
+  }
+
+  std::string tagnameFormatValue() const {
+    if (!m_tagnameFormat.empty() &&
+        m_tagnameFormat != m_tagnameFormatDefault)
+      return m_tagnameFormat;
     else
       return std::string();
   }
@@ -910,6 +937,7 @@ private:
 
   void onSplitLayersOrFrames() {
     updateDefaultDataFilenameFormat();
+    updateDefaultDataTagnameFormat();
     generatePreview();
   }
 
@@ -917,6 +945,12 @@ private:
     m_filenameFormat = dataFilenameFormat()->text();
     if (m_filenameFormat.empty())
       updateDefaultDataFilenameFormat();
+  }
+
+  void onDataTagnameFormatChange() {
+    m_tagnameFormat = dataTagnameFormat()->text();
+    if (m_tagnameFormat.empty())
+      updateDefaultDataTagnameFormat();
   }
 
   void onOpenGeneratedChange() {
@@ -950,11 +984,23 @@ private:
     }
   }
 
+  void updateDefaultDataTagnameFormat() {
+    m_tagnameFormatDefault =
+      get_default_tagname_format_for_sheet();
+
+    if (m_tagnameFormat.empty()) {
+      dataTagnameFormat()->setText(m_tagnameFormatDefault);
+    }
+    else {
+      dataTagnameFormat()->setText(m_tagnameFormat);
+    }
+  }
+
   void updateDataFields() {
     bool state = dataEnabled()->isSelected();
     dataFilename()->setVisible(state);
     dataMeta()->setVisible(state);
-    dataFilenameFormatPlaceholder()->setVisible(state);
+    dataFormatsPlaceholder()->setVisible(state);
   }
 
   void onGenTimerTick() {
@@ -979,8 +1025,7 @@ private:
         auto ctx = UIContext::instance();
         ctx->setActiveDocument(m_site.document());
 
-        DocDestroyer destroyer(ctx, m_spriteSheet.release(), 100);
-        destroyer.destroyDocument();
+        destroy_doc(ctx, m_spriteSheet.release());
         m_editor = nullptr;
       }
       return;
@@ -1031,8 +1076,7 @@ private:
       return;
 
     if (token.canceled()) {
-      DocDestroyer destroyer(&tmpCtx, newDocument, 100);
-      destroyer.destroyDocument();
+      destroy_doc(&tmpCtx, newDocument);
       return;
     }
 
@@ -1055,8 +1099,7 @@ private:
         // old one. IN this case the newDocument contains a back
         // buffer (ImageBufferPtr) that will be discarded.
         m_executionID != executionID) {
-      DocDestroyer destroyer(context, newDocument, 100);
-      destroyer.destroyDocument();
+      destroy_doc(context, newDocument);
       return;
     }
 
@@ -1102,8 +1145,7 @@ private:
 
       m_spriteSheet->notifyGeneralUpdate();
 
-      DocDestroyer destroyer(context, newDocument, 100);
-      destroyer.destroyDocument();
+      destroy_doc(context, newDocument);
     }
 
     waitGenTaskAndDelete();
@@ -1142,6 +1184,8 @@ private:
   int m_executionID;
   std::string m_filenameFormat;
   std::string m_filenameFormatDefault;
+  std::string m_tagnameFormat;
+  std::string m_tagnameFormatDefault;
 };
 
 class ExportSpriteSheetJob : public Job {
@@ -1235,6 +1279,7 @@ void ExportSpriteSheetCommand::onExecute(Context* context)
       if (!params.dataFilename.isSet())     params.dataFilename(    defPref.spriteSheet.dataFilename());
       if (!params.dataFormat.isSet())       params.dataFormat(      defPref.spriteSheet.dataFormat());
       if (!params.filenameFormat.isSet())   params.filenameFormat(  defPref.spriteSheet.filenameFormat());
+      if (!params.tagnameFormat.isSet())    params.tagnameFormat(   defPref.spriteSheet.tagnameFormat());
       if (!params.borderPadding.isSet())    params.borderPadding(   defPref.spriteSheet.borderPadding());
       if (!params.shapePadding.isSet())     params.shapePadding(    defPref.spriteSheet.shapePadding());
       if (!params.innerPadding.isSet())     params.innerPadding(    defPref.spriteSheet.innerPadding());
@@ -1283,6 +1328,7 @@ void ExportSpriteSheetCommand::onExecute(Context* context)
     docPref.spriteSheet.dataFilename    (params.dataFilename());
     docPref.spriteSheet.dataFormat      (params.dataFormat());
     docPref.spriteSheet.filenameFormat  (params.filenameFormat());
+    docPref.spriteSheet.tagnameFormat   (params.tagnameFormat());
     docPref.spriteSheet.borderPadding   (params.borderPadding());
     docPref.spriteSheet.shapePadding    (params.shapePadding());
     docPref.spriteSheet.innerPadding    (params.innerPadding());
@@ -1368,8 +1414,7 @@ void ExportSpriteSheetCommand::onExecute(Context* context)
     newDocument.release();
   }
   else {
-    DocDestroyer destroyer(context, newDocument.release(), 100);
-    destroyer.destroyDocument();
+    destroy_doc(context, newDocument.release());
   }
 }
 

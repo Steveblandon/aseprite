@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2024  Igara Studio S.A.
 // Copyright (C) 2001-2017  David Capello
 //
 // This program is distributed under the terms of
@@ -21,7 +21,7 @@
 #include "ui/timer.h"
 
 namespace doc {
-  class Image;
+  class Layer;
 }
 
 namespace app {
@@ -54,35 +54,37 @@ namespace app {
     void updateTransformation(const Transformation& t);
 
     // EditorState
-    virtual void onEnterState(Editor* editor) override;
-    virtual void onEditorGotFocus(Editor* editor) override;
-    virtual LeaveAction onLeaveState(Editor* editor, EditorState* newState) override;
-    virtual void onActiveToolChange(Editor* editor, tools::Tool* tool) override;
-    virtual bool onMouseDown(Editor* editor, ui::MouseMessage* msg) override;
-    virtual bool onMouseUp(Editor* editor, ui::MouseMessage* msg) override;
-    virtual bool onMouseMove(Editor* editor, ui::MouseMessage* msg) override;
-    virtual bool onSetCursor(Editor* editor, const gfx::Point& mouseScreenPos) override;
-    virtual bool onKeyDown(Editor* editor, ui::KeyMessage* msg) override;
-    virtual bool onKeyUp(Editor* editor, ui::KeyMessage* msg) override;
-    virtual bool onUpdateStatusBar(Editor* editor) override;
-    virtual bool acceptQuickTool(tools::Tool* tool) override;
-    virtual bool requireBrushPreview() override { return false; }
+    void onEnterState(Editor* editor) override;
+    void onEditorGotFocus(Editor* editor) override;
+    LeaveAction onLeaveState(Editor* editor, EditorState* newState) override;
+    void onActiveToolChange(Editor* editor, tools::Tool* tool) override;
+    bool onMouseDown(Editor* editor, ui::MouseMessage* msg) override;
+    bool onMouseUp(Editor* editor, ui::MouseMessage* msg) override;
+    bool onMouseMove(Editor* editor, ui::MouseMessage* msg) override;
+    bool onSetCursor(Editor* editor, const gfx::Point& mouseScreenPos) override;
+    bool onKeyDown(Editor* editor, ui::KeyMessage* msg) override;
+    bool onKeyUp(Editor* editor, ui::KeyMessage* msg) override;
+    bool onUpdateStatusBar(Editor* editor) override;
+    bool acceptQuickTool(tools::Tool* tool) override;
+    bool requireBrushPreview() override { return false; }
+    void onBeforeLayerVisibilityChange(Editor* editor, doc::Layer* layer, bool newState) override;
+
 
     // EditorObserver
-    virtual void onDestroyEditor(Editor* editor) override;
-    virtual void onBeforeFrameChanged(Editor* editor) override;
-    virtual void onBeforeLayerChanged(Editor* editor) override;
+    void onDestroyEditor(Editor* editor) override;
+    void onBeforeFrameChanged(Editor* editor) override;
+    void onBeforeLayerChanged(Editor* editor) override;
 
     // TimelineObserver
-    virtual void onBeforeRangeChanged(Timeline* timeline) override;
+    void onBeforeRangeChanged(Timeline* timeline) override;
 
     // ContextBarObserver
-    virtual void onDropPixels(ContextBarObserver::DropAction action) override;
+    void onDropPixels(ContextBarObserver::DropAction action) override;
 
     // PixelsMovementDelegate
-    virtual void onPivotChange() override;
+    void onPivotChange() override;
 
-    virtual Transformation getTransformation(Editor* editor) override;
+    Transformation getTransformation(Editor* editor) override;
 
   private:
     // DelayedMouseMoveDelegate impl
@@ -104,6 +106,8 @@ namespace app {
     void removeAsEditorObserver();
     void removePixelsMovement();
 
+    KeyAction getCurrentKeyAction() const;
+
     // Helper member to move/translate selection and pixels.
     PixelsMovementPtr m_pixelsMovement;
     DelayedMouseMove m_delayedMouseMove;
@@ -113,6 +117,12 @@ namespace app {
     // True if the image was discarded (e.g. when a "Cut" command was
     // used to remove the dragged image).
     bool m_discarded;
+
+    // Variable to store the initial key action to ignore it until we
+    // re-press the key. This was done mainly to avoid activating the
+    // fine control with the Ctrl key when we copy the selection until
+    // the user release and press again the Ctrl key.
+    KeyAction m_lockedKeyAction = KeyAction::None;
 
     ui::Timer m_renderTimer;
 

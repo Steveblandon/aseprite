@@ -1,5 +1,5 @@
 # Aseprite Document Library
-# Copyright (C) 2019-2022 Igara Studio S.A.
+# Copyright (C) 2019-2023 Igara Studio S.A.
 # Copyright (C) 2001-2018 David Capello
 
 if(WIN32)
@@ -13,6 +13,7 @@ add_library(doc-lib
   algorithm/floodfill.cpp
   algorithm/modify_selection.cpp
   algorithm/polygon.cpp
+  algorithm/random_image.cpp
   algorithm/resize_image.cpp
   algorithm/rotate.cpp
   algorithm/rotsprite.cpp
@@ -37,6 +38,7 @@ add_library(doc-lib
   file/gpl_file.cpp
   file/hex_file.cpp
   file/pal_file.cpp
+  frames_sequence.cpp
   grid.cpp
   grid_io.cpp
   image.cpp
@@ -57,6 +59,7 @@ add_library(doc-lib
   playback.cpp
   primitives.cpp
   remap.cpp
+  render_plan.cpp
   rgbmap_rgb5a3.cpp
   selected_frames.cpp
   selected_layers.cpp
@@ -71,9 +74,11 @@ add_library(doc-lib
   tag.cpp
   tag_io.cpp
   tags.cpp
+  tile_primitives.cpp
   tileset.cpp
   tileset_io.cpp
   tilesets.cpp
+  user_data.cpp
   user_data_io.cpp
   util.cpp)
 

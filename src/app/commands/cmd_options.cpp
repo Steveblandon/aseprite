@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2022  Igara Studio S.A.
+// Copyright (C) 2018-2024  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -164,6 +164,19 @@ class OptionsWindow : public app::gen::Options {
     std::string m_name;
   };
 
+  class LangItem : public ListItem {
+  public:
+    LangItem(const LangInfo& langInfo)
+      : ListItem(langInfo.displayName)
+      , m_langInfo(langInfo) {
+    }
+    const std::string& langId() const {
+      return m_langInfo.id;
+    }
+  private:
+    LangInfo m_langInfo;
+  };
+
   class ExtensionItem : public ListItem {
   public:
     ExtensionItem(Extension* extension)
@@ -318,16 +331,18 @@ public:
     // Slices default color
     defaultSliceColor()->setColor(m_pref.slices.defaultColor());
 
-    // Others
+    // Timeline
     firstFrame()->setTextf("%d", m_globPref.timeline.firstFrame());
+    resetTimelineSel()->Click.connect([this]{ onResetTimelineSel(); });
 
+    // Others
     if (m_pref.general.expandMenubarOnMouseover())
       expandMenubarOnMouseover()->setSelected(true);
 
     if (m_pref.general.dataRecovery())
       enableDataRecovery()->setSelected(true);
     enableDataRecovery()->Click.connect(
-      [this](Event&){
+      [this](){
         const bool state = enableDataRecovery()->isSelected();
         keepEditedSpriteData()->setEnabled(state);
         keepEditedSpriteData()->setSelected(state);
@@ -401,11 +416,18 @@ public:
 
     onNativeCursorChange();
 
-    if (m_pref.experimental.useNativeClipboard())
-      nativeClipboard()->setSelected(true);
-
-    if (m_pref.experimental.useNativeFileDialog())
-      nativeFileDialog()->setSelected(true);
+    // "Show Aseprite file dialog" option is the inverse of the old
+    // experimental "use native file dialog" option
+    showAsepriteFileDialog()->setSelected(
+      !m_pref.experimental.useNativeFileDialog());
+    showAsepriteFileDialog()->Click.connect([this]{
+      nativeFileDialog()->setSelected(
+        !showAsepriteFileDialog()->isSelected());
+    });
+    nativeFileDialog()->Click.connect([this]{
+      showAsepriteFileDialog()->setSelected(
+        !nativeFileDialog()->isSelected());
+    });
 
 #ifdef _WIN32 // Show Tablet section on Windows
     {
@@ -427,13 +449,13 @@ public:
         loadWintabDriver2()->setSelected(false);
       }
 
-      tabletApiWindowsPointer()->Click.connect([this](Event&){ onTabletAPIChange(); });
-      tabletApiWintabSystem()->Click.connect([this](Event&){ onTabletAPIChange(); });
-      tabletApiWintabDirect()->Click.connect([this](Event&){ onTabletAPIChange(); });
+      tabletApiWindowsPointer()->Click.connect([this](){ onTabletAPIChange(); });
+      tabletApiWintabSystem()->Click.connect([this](){ onTabletAPIChange(); });
+      tabletApiWintabDirect()->Click.connect([this](){ onTabletAPIChange(); });
       loadWintabDriver()->Click.connect(
-        [this](Event&){ onLoadWintabChange(loadWintabDriver()->isSelected()); });
+        [this](){ onLoadWintabChange(loadWintabDriver()->isSelected()); });
       loadWintabDriver2()->Click.connect(
-        [this](Event&){ onLoadWintabChange(loadWintabDriver2()->isSelected()); });
+        [this](){ onLoadWintabChange(loadWintabDriver2()->isSelected()); });
     }
 #else  // For macOS and Linux
     {
@@ -484,10 +506,21 @@ public:
       gridScope()->Change.connect([this]{ onChangeGridScope(); });
     }
 
+    // Update the one/multiple window buttonset (and keep in on sync
+    // with the old/experimental checkbox)
+    uiWindows()->setSelectedItem(multipleWindows()->isSelected() ? 1: 0);
+    uiWindows()->ItemChange.connect([this]() {
+      multipleWindows()->setSelected(uiWindows()->selectedItem() == 1);
+    });
+    multipleWindows()->Click.connect([this](){
+      uiWindows()->setSelectedItem(multipleWindows()->isSelected() ? 1: 0);
+    });
+
+    // Scaling
     selectScalingItems();
 
-#ifdef _DEBUG // TODO enable this on Release when Aseprite supports
-              //      GPU-acceleration properly
+#ifdef ENABLE_DEVMODE // TODO enable this on Release when Aseprite supports
+                      //      GPU-acceleration properly
     if (os::instance()->hasCapability(os::Capabilities::GpuAccelerationSwitch)) {
       gpuAcceleration()->setSelected(m_pref.general.gpuAcceleration());
     }
@@ -630,8 +663,9 @@ public:
 #endif
 
     // Update language
-    Strings::instance()->setCurrentLanguage(
-      language()->getItemText(language()->getSelectedItemIndex()));
+    if (auto item = dynamic_cast<const LangItem*>(language()->getSelectedItem())) {
+      Strings::instance()->setCurrentLanguage(item->langId());
+    }
 
     m_globPref.timeline.firstFrame(firstFrame()->textInt());
     m_pref.general.showFullPath(showFullPath()->isSelected());
@@ -742,12 +776,23 @@ public:
     }
     update_windows_color_profile_from_preferences();
 
+    m_pref.range.alpha(static_cast<app::gen::AlphaRange>(alpha()->getSelectedItemIndex()));
+    m_pref.range.opacity(static_cast<app::gen::AlphaRange>(opacity()->getSelectedItemIndex()));
+
     // Change sprite grid bounds
-    if (m_context && m_context->activeDocument()) {
-      ContextWriter writer(m_context);
-      Tx tx(m_context, Strings::commands_GridSettings(), ModifyDocument);
-      tx(new cmd::SetGridBounds(writer.sprite(), gridBounds()));
-      tx.commit();
+    if (m_context &&
+        m_context->activeDocument() &&
+        m_context->activeDocument()->sprite() &&
+        m_context->activeDocument()->sprite()->gridBounds() != gridBounds()) {
+      try {
+        ContextWriter writer(m_context, 1000);
+        Tx tx(writer, Strings::commands_GridSettings(), ModifyDocument);
+        tx(new cmd::SetGridBounds(writer.sprite(), gridBounds()));
+        tx.commit();
+      }
+      catch (const std::exception& ex) {
+        Console::showException(ex);
+      }
     }
 
     m_curPref->show.grid(gridVisible()->isSelected());
@@ -783,8 +828,6 @@ public:
     m_pref.undo.allowNonlinearHistory(undoAllowNonlinearHistory()->isSelected());
 
     // Experimental features
-    m_pref.experimental.useNativeClipboard(nativeClipboard()->isSelected());
-    m_pref.experimental.useNativeFileDialog(nativeFileDialog()->isSelected());
     m_pref.experimental.flashLayer(flashLayer()->isSelected());
     m_pref.experimental.nonactiveLayersOpacity(nonactiveLayersOpacity()->getValue());
     m_pref.quantization.rgbmapAlgorithm(m_rgbmapAlgorithmSelector.algorithm());
@@ -942,6 +985,8 @@ private:
       m_themeVars->deferDelete();
     }
     m_themeVars = list;
+    themeVariants()->setVisible(list ? true: false);
+    themeVariants()->initTheme();
   }
 
   void fillExtensionsCombobox(ui::ComboBox* combobox,
@@ -1036,6 +1081,9 @@ private:
     filesWithCs()->setEnabled(state);
     missingCsLabel()->setEnabled(state);
     missingCs()->setEnabled(state);
+
+    alpha()->setSelectedItemIndex(static_cast<int>(m_pref.range.alpha()));
+    opacity()->setSelectedItemIndex(static_cast<int>(m_pref.range.opacity()));
   }
 
   void onResetColorManagement() {
@@ -1269,11 +1317,23 @@ private:
     if (language()->getItemCount() > 0)
       return;
 
+    // Check if the current language exists, in other case select English.
     Strings* strings = Strings::instance();
     std::string curLang = strings->currentLanguage();
-    for (const std::string& lang : strings->availableLanguages()) {
-      int i = language()->addItem(lang);
-      if (lang == curLang)
+    bool found = false;
+    for (const LangInfo& lang : strings->availableLanguages()) {
+      if (lang.id == curLang) {
+        found = true;
+        break;
+      }
+    }
+    if (!found)
+      curLang = Strings::kDefLanguage;
+
+    // Select current language by lang ID
+    for (const LangInfo& lang : strings->availableLanguages()) {
+      int i = language()->addItem(new LangItem(lang));
+      if (lang.id == curLang)
         language()->setSelectedItemIndex(i);
     }
   }
@@ -1665,6 +1725,14 @@ private:
         break;
     }
     layout();
+  }
+
+  void onResetTimelineSel() {
+    keepSelection()->setSelected(m_pref.timeline.keepSelection.defaultValue());
+    selectOnClick()->setSelected(m_pref.timeline.selectOnClick.defaultValue());
+    selectOnClickWithKey()->setSelected(m_pref.timeline.selectOnClickWithKey.defaultValue());
+    selectOnDrag()->setSelected(m_pref.timeline.selectOnDrag.defaultValue());
+    dragAndDropFromEdges()->setSelected(m_pref.timeline.dragAndDropFromEdges.defaultValue());
   }
 
   gfx::Rect gridBounds() const {

@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2022  Igara Studio S.A.
+// Copyright (C) 2018-2023  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -104,7 +104,7 @@ bool FliFormat::onLoad(FileOp* fop)
   flic::Frame fliFrame;
   flic::Colormap oldFliColormap;
   fliFrame.pixels = bmp->getPixelAddress(0, 0);
-  fliFrame.rowstride = IndexedTraits::getRowStrideBytes(bmp->width());
+  fliFrame.rowstride = bmp->rowBytes();
 
   frame_t frame_out = 0;
   for (frame_t frame_in=0;
@@ -176,12 +176,12 @@ bool FliFormat::onLoad(FileOp* fop)
 #ifdef ENABLE_SAVE
 
 static int get_time_precision(const FileAbstractImage* sprite,
-                              const doc::SelectedFrames& selFrames)
+                              const doc::FramesSequence& framesSeq)
 {
   // Check if all frames have the same duration
   bool constantFrameRate = true;
   frame_t prevFrame = -1;
-  for (frame_t frame : selFrames) {
+  for (frame_t frame : framesSeq) {
     if (prevFrame >= 0) {
       if (sprite->frameDuration(prevFrame) != sprite->frameDuration(frame)) {
         constantFrameRate = false;
@@ -194,7 +194,7 @@ static int get_time_precision(const FileAbstractImage* sprite,
     return sprite->frameDuration(0);
 
   int precision = 1000;
-  for (frame_t frame : selFrames) {
+  for (frame_t frame : framesSeq) {
     int len = sprite->frameDuration(frame);
     while (len / precision == 0)
       precision /= 10;
@@ -206,7 +206,7 @@ static int get_time_precision(const FileAbstractImage* sprite,
 
 bool FliFormat::onSave(FileOp* fop)
 {
-  const FileAbstractImage* sprite = fop->abstractImage();
+  const FileAbstractImage* sprite = fop->abstractImageToSave();
 
   // Open the file to write in binary mode
   FileHandle handle(open_file_with_exception_sync_on_close(fop->filename(), "wb"));
@@ -218,7 +218,7 @@ bool FliFormat::onSave(FileOp* fop)
   header.frames = 0;
   header.width = sprite->width();
   header.height = sprite->height();
-  header.speed = get_time_precision(sprite, fop->roi().selectedFrames());
+  header.speed = get_time_precision(sprite, fop->roi().framesSequence());
   encoder.writeHeader(header);
 
   // Create the bitmaps
@@ -229,10 +229,10 @@ bool FliFormat::onSave(FileOp* fop)
   // Write frame by frame
   flic::Frame fliFrame;
   fliFrame.pixels = bmp->getPixelAddress(0, 0);
-  fliFrame.rowstride = IndexedTraits::getRowStrideBytes(bmp->width());
+  fliFrame.rowstride = bmp->rowBytes();
 
-  auto frame_beg = fop->roi().selectedFrames().begin();
-  auto frame_end = fop->roi().selectedFrames().end();
+  auto frame_beg = fop->roi().framesSequence().begin();
+  auto frame_end = fop->roi().framesSequence().end();
   auto frame_it = frame_beg;
   frame_t nframes = fop->roi().frames();
   for (frame_t f=0; f<=nframes; ++f, ++frame_it) {
@@ -251,7 +251,7 @@ bool FliFormat::onSave(FileOp* fop)
     }
 
     // Render the frame in the bitmap
-    sprite->renderFrame(frame, bmp.get());
+    sprite->renderFrame(frame, fop->roi().frameBounds(frame), bmp.get());
 
     // How many times this frame should be written to get the same
     // time that it has in the sprite

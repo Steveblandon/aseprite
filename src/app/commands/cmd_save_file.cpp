@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2023  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -30,6 +30,7 @@
 #include "app/recent_files.h"
 #include "app/restore_visible_layers.h"
 #include "app/ui/export_file_window.h"
+#include "app/ui/incompat_file_window.h"
 #include "app/ui/layer_frame_comboboxes.h"
 #include "app/ui/optional_alert.h"
 #include "app/ui/status_bar.h"
@@ -99,11 +100,11 @@ void SaveFileBaseCommand::onLoadParams(const Params& params)
       this->params().toFrame.isSet()) {
     doc::frame_t fromFrame = this->params().fromFrame();
     doc::frame_t toFrame = this->params().toFrame();
-    m_selFrames.insert(fromFrame, toFrame);
+    m_framesSeq.insert(fromFrame, toFrame);
     m_adjustFramesByTag = true;
   }
   else {
-    m_selFrames.clear();
+    m_framesSeq.clear();
     m_adjustFramesByTag = false;
   }
 }
@@ -112,7 +113,7 @@ void SaveFileBaseCommand::onLoadParams(const Params& params)
 // [main thread]
 bool SaveFileBaseCommand::onEnabled(Context* context)
 {
-  return context->checkFlags(ContextFlags::ActiveDocumentIsWritable);
+  return context->checkFlags(ContextFlags::ActiveDocumentIsReadable);
 }
 
 std::string SaveFileBaseCommand::saveAsDialog(
@@ -162,6 +163,12 @@ std::string SaveFileBaseCommand::saveAsDialog(
   if (filename.empty())
     return std::string();
 
+  // Document is being saved under a different path/name, remove
+  // read-only mark then.
+  if (filename != initialFilename) {
+    document->removeReadOnlyMark();
+  }
+
   if (saveInBackground == SaveInBackground::On) {
     saveDocumentInBackground(
       context, document,
@@ -194,28 +201,30 @@ void SaveFileBaseCommand::saveDocumentInBackground(
   const ResizeOnTheFly resizeOnTheFly,
   const gfx::PointF& scale)
 {
-  if (params().aniDir.isSet()) {
-    switch (params().aniDir()) {
-      case AniDir::REVERSE:
-        m_selFrames = m_selFrames.makeReverse();
-        break;
-      case AniDir::PING_PONG:
-        m_selFrames = m_selFrames.makePingPong();
-        break;
-      case AniDir::PING_PONG_REVERSE:
-        m_selFrames = m_selFrames.makePingPong();
-        m_selFrames = m_selFrames.makeReverse();
-        break;
-    }
+#ifdef ENABLE_UI
+  // If the document is read only, we cannot save it directly (we have
+  // to use File > Save As)
+  if (document->isReadOnly() &&
+      context->isUIAvailable()) {
+    IncompatFileWindow window;
+    window.show();
+    return;
   }
+#endif // ENABLE_UI
 
   gfx::Rect bounds;
-  if (params().bounds.isSet())
+  if (params().bounds.isSet()) {
+    // Export the specific given bounds (e.g. the selection bounds)
     bounds = params().bounds();
+  }
+  else {
+    // Export the whole sprite canvas.
+    bounds = document->sprite()->bounds();
+  }
 
   FileOpROI roi(document, bounds,
                 params().slice(), params().tag(),
-                m_selFrames, m_adjustFramesByTag);
+                m_framesSeq, m_adjustFramesByTag);
 
   std::unique_ptr<FileOp> fop(
     FileOp::createSaveDocumentOperation(
@@ -238,8 +247,10 @@ void SaveFileBaseCommand::saveDocumentInBackground(
     console.printf(fop->error().c_str());
 
     // We don't know if the file was saved correctly or not. So mark
-    // it as it should be saved again.
-    document->impossibleToBackToSavedState();
+    // it as it should be saved again. Except for read-only documents,
+    // since we know they must not be saved.
+    if (!document->isReadOnly())
+      document->impossibleToBackToSavedState();
   }
   // If the job was cancelled, mark the document as modified.
   else if (fop->isStop()) {
@@ -359,6 +370,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
   double scale = params().scale();
   gfx::Rect bounds = params().bounds();
   doc::AniDir aniDirValue = params().aniDir();
+  bool isPlaySubtags = params().playSubtags();
   bool isForTwitter = false;
 
 #if ENABLE_UI
@@ -436,6 +448,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
     applyPixelRatio = win.applyPixelRatio();
     aniDirValue = win.aniDirValue();
     isForTwitter = win.isForTwitter();
+    isPlaySubtags = win.isPlaySubtags();
   }
 #endif
 
@@ -492,14 +505,14 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
 
       // m_selFrames is not empty if fromFrame/toFrame parameters are
       // specified.
-      if (m_selFrames.empty()) {
-        // Selected frames to export
-        SelectedFrames selFrames;
-        Tag* tag = calculate_selected_frames(
-          site, frames, selFrames);
+      if (m_framesSeq.empty()) {
+        // Frames sequence to export
+        FramesSequence framesSeq;
+        Tag* tag = calculate_frames_sequence(
+          site, frames, framesSeq, isPlaySubtags, aniDirValue);
         if (tag)
           params().tag(tag->name());
-        m_selFrames = selFrames;
+        m_framesSeq = framesSeq;
       }
       m_adjustFramesByTag = false;
     }
@@ -508,6 +521,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
     params().aniDir(aniDirValue);
     if (!bounds.isEmpty())
       params().bounds(bounds);
+    params().playSubtags(isPlaySubtags);
 
     // TODO This should be set as options for the specific encoder
     GifEncoderDurationFix fixGif(isForTwitter);

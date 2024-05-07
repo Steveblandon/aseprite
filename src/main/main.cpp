@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2023  Igara Studio S.A.
 // Copyright (C) 2001-2016  David Capello
 //
 // This program is distributed under the terms of
@@ -17,6 +17,7 @@
 #include "base/exception.h"
 #include "base/memory.h"
 #include "base/system_console.h"
+#include "base/thread.h"
 #include "doc/palette.h"
 #include "os/error.h"
 #include "os/system.h"
@@ -112,12 +113,15 @@ int app_main(int argc, char* argv[])
   CoInit com;                   // To create COM objects
 #endif
 
-  try {
+  // Main thread name
+  base::this_thread::set_name("main");
+
 #if ENABLE_SENTRY
-    app::Sentry sentry;
+  app::Sentry sentry;
 #else
-    base::MemoryDump memoryDump;
+  base::MemoryDump memoryDump;
 #endif
+  try {
     MemLeak memleak;
     base::SystemConsole systemConsole;
     app::AppOptions options(argc, const_cast<const char**>(argv));
@@ -154,6 +158,13 @@ int app_main(int argc, char* argv[])
   catch (std::exception& e) {
     std::cerr << e.what() << '\n';
     os::error_message(e.what());
-    return 1;
+
+#if ENABLE_SENTRY
+    sentry.addBreadcrumb(e.what());
+#endif
+
+    // Crash with the unhandled exception, so the OS or Sentry can
+    // handle/report the crash.
+    throw;
   }
 }
